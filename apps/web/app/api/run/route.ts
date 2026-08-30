@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
       `[Run API] Enqueued run job=${jobId} problem=${problem.id} lang=${language} user=${auth.user.id}`,
     );
 
-    // 11. Return jobId immediately — client polls /api/run/:jobId/result
+    // 11. Return jobId immediately — client polls /api/run/:jobId
     return NextResponse.json({ jobId }, { status: 202 });
   } catch (error) {
     console.error("[Run API] Unexpected error:", error);

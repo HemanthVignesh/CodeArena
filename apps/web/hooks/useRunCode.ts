@@ -45,9 +45,9 @@ export interface UseRunCodeReturn {
 // ── Constants ─────────────────────────────────────────────────────────────────
 
 const POLL_INTERVAL_MS = 1000;
-const MAX_POLL_ATTEMPTS = 30; // 30 seconds max wait
+const MAX_POLL_ATTEMPTS = 45; // 45 seconds max wait
 const MAX_POLL_TIMEOUT_MSG =
-  "Execution is taking longer than expected. Your code may have timed out.";
+  "Execution did not complete within the expected time. Please try again or check your code for infinite loops.";
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ const MAX_POLL_TIMEOUT_MSG =
  *
  * Manages the full lifecycle of a Run Code request:
  * 1. POST /api/run → receive jobId
- * 2. Poll GET /api/run/:jobId/result every ~1s
+ * 2. Poll GET /api/run/:jobId every ~1s
  * 3. Return result when ready
  *
  * Prevents duplicate requests. Cleans up polling on unmount.
@@ -192,7 +192,7 @@ export function useRunCode(): UseRunCodeReturn {
         }
 
         try {
-          const pollRes = await fetch(`/api/run/${jobId}/result`);
+          const pollRes = await fetch(`/api/run/${jobId}`);
 
           if (!mountedRef.current) {
             stopPolling();
@@ -200,7 +200,14 @@ export function useRunCode(): UseRunCodeReturn {
           }
 
           if (!pollRes.ok) {
-            // Non-fatal poll error — keep polling unless we've exceeded max
+            if (pollRes.status === 404) {
+              // 404 = job ID not found or route mismatch — fatal, stop immediately
+              stopPolling();
+              setState("error");
+              setError("Run job not found. Please try again.");
+              return;
+            }
+            // Other transient errors — keep polling unless we've exceeded max
             console.warn("[useRunCode] Poll error:", pollRes.status);
             return;
           }
