@@ -1,0 +1,377 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// --------------------------------------------------------
+// ENUMS
+// --------------------------------------------------------
+
+enum Role {
+  USER
+  MODERATOR
+  ADMIN
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum Language {
+  PYTHON
+  CPP
+  TYPESCRIPT
+  JAVASCRIPT
+  JAVA
+  RUST
+  GO
+}
+
+enum SubmissionStatus {
+  QUEUED
+  RUNNING
+  COMPLETED
+}
+
+enum Verdict {
+  ACCEPTED
+  WRONG_ANSWER
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  COMPILATION_ERROR
+  RUNTIME_ERROR
+  INTERNAL_ERROR
+}
+
+enum ContestStatus {
+  UPCOMING
+  RUNNING
+  FINISHED
+}
+
+enum AIInteractionType {
+  HINT_LEVEL_1
+  HINT_LEVEL_2
+  HINT_LEVEL_3
+  CODE_EXPLANATION
+  COMPLEXITY_ANALYSIS
+}
+
+// ========================================================
+// USER & AUTHENTICATION
+// ========================================================
+
+model User {
+  id              String          @id @default(cuid())
+  email           String          @unique
+  username        String          @unique
+  passwordHash    String
+  role            Role            @default(USER)
+  isEmailVerified Boolean         @default(false)
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  sessions        Session[]
+  profile         Profile?
+  submissions     Submission[]
+  activities      DailyActivity[]
+
+  // Relations for Post-MVP features (Schema-ready, logic deferred)
+  contestEntries  ContestParticipant[]
+  aiInteractions  AIInteraction[]
+
+  @@index([email])
+  @@index([username])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  ipAddress    String?
+  userAgent    String?
+  createdAt    DateTime @default(now())
+
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionToken])
+}
+
+// --------------------------------------------------------
+// USER PROFILE & STATISTICS
+// --------------------------------------------------------
+
+model Profile {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  avatarUrl        String?
+  bio              String?   @db.VarChar(500)
+  githubUrl        String?
+  linkedinUrl      String?
+
+  // Rating & Derived stats (globalRank is computed/cached, not authoritative)
+  rating           Int       @default(1200)
+  globalRank       Int?
+
+  // Solved Stats
+  totalSolved      Int       @default(0)
+  easySolved       Int       @default(0)
+  mediumSolved     Int       @default(0)
+  hardSolved       Int       @default(0)
+  totalSubmissions Int       @default(0)
+
+  // Streak Management
+  currentStreak    Int       @default(0)
+  maxStreak        Int       @default(0)
+  lastActiveAt     DateTime?
+
+  user             User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([rating(sort: Desc)])
+  @@index([totalSolved(sort: Desc)])
+}
+
+model DailyActivity {
+  id              String   @id @default(cuid())
+  userId          String
+  date            DateTime @db.Date // YYYY-MM-DD
+  submissionCount Int      @default(0)
+  solvedCount     Int      @default(0)
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId, date(sort: Desc)])
+}
+
+// --------------------------------------------------------
+// PROBLEMS & METADATA
+// --------------------------------------------------------
+
+model Problem {
+  id               String             @id @default(cuid())
+  slug             String             @unique
+  title            String
+  difficulty       Difficulty         @default(EASY)
+  statement        String             @db.Text
+  inputFormat      String             @db.Text
+  outputFormat     String             @db.Text
+  constraints      String             @db.Text
+
+  // Default limits
+  timeLimitMs      Int                @default(1000)
+  memoryLimitMb    Int                @default(256)
+
+  // Editorial and Hints
+  editorial        String?            @db.Text
+  hints            String[]           @default([])
+
+  // Aggregate Stats
+  totalAccepted    Int                @default(0)
+  totalSubmissions Int                @default(0)
+  acceptanceRate   Float              @default(0.0)
+
+  isPublished      Boolean            @default(false)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  tags             ProblemTag[]
+  testCases        TestCase[]
+  templates        LanguageTemplate[]
+  submissions      Submission[]
+
+  // Post-MVP relations
+  contestProblems  ContestProblem[]
+  aiInteractions   AIInteraction[]
+
+  @@index([difficulty])
+  @@index([isPublished])
+  @@index([slug])
+}
+
+model Tag {
+  id       String       @id @default(cuid())
+  name     String       @unique
+  slug     String       @unique
+  problems ProblemTag[]
+
+  @@index([slug])
+}
+
+model ProblemTag {
+  problemId String
+  tagId     String
+
+  problem   Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([problemId, tagId])
+  @@index([tagId])
+  @@index([problemId])
+}
+
+model TestCase {
+  id             String                 @id @default(cuid())
+  problemId      String
+  inputData      String                 @db.Text
+  expectedOutput String                 @db.Text
+
+  isSample       Boolean                @default(false)
+  isHidden       Boolean                @default(true)
+  orderIndex     Int                    @default(0)
+  explanation    String?                @db.Text
+
+  problem        Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  caseResults    SubmissionCaseResult[]
+
+  @@index([problemId, isSample])
+  @@index([problemId, orderIndex])
+}
+
+model LanguageTemplate {
+  id          String   @id @default(cuid())
+  problemId   String
+  language    Language
+  boilerPlate String   @db.Text
+  driverCode  String?  @db.Text
+
+  problem     Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@unique([problemId, language])
+}
+
+// --------------------------------------------------------
+// SUBMISSIONS & VERDICTS
+// --------------------------------------------------------
+
+model Submission {
+  id              String                 @id @default(cuid())
+  userId          String
+  problemId       String
+  contestId       String?
+  language        Language
+  code            String                 @db.Text
+
+  status          SubmissionStatus       @default(QUEUED)
+  verdict         Verdict?
+
+  executionTimeMs Int?
+  memoryUsedKb    Int?
+  passedCases     Int                    @default(0)
+  totalCases      Int                    @default(0)
+
+  compileOutput   String?                @db.Text
+  errorMessage    String?                @db.Text
+
+  createdAt       DateTime               @default(now())
+
+  user            User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem         Problem                @relation(fields: [problemId], references: [id], onDelete: Cascade)
+  contest         Contest?               @relation(fields: [contestId], references: [id], onDelete: SetNull)
+  caseResults     SubmissionCaseResult[]
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([userId, verdict])
+  @@index([userId, problemId])
+  @@index([userId, language])
+  @@index([problemId, verdict])
+  @@index([status])
+  @@index([contestId])
+}
+
+model SubmissionCaseResult {
+  id              String     @id @default(cuid())
+  submissionId    String
+  testCaseId      String
+  status          Verdict
+  executionTimeMs Int
+  memoryUsedKb    Int
+
+  stdout          String?    @db.Text
+  stderr          String?    @db.Text
+  actualOutput    String?    @db.Text
+
+  submission      Submission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  testCase        TestCase   @relation(fields: [testCaseId], references: [id], onDelete: Cascade)
+
+  @@index([submissionId])
+}
+
+// ========================================================
+// POST-MVP ENTITIES (Schema defined for compatibility;
+// business logic deferred beyond MVP)
+// ========================================================
+
+model Contest {
+  id           String               @id @default(cuid())
+  slug         String               @unique
+  title        String
+  description  String               @db.Text
+  startTime    DateTime
+  endTime      DateTime
+  status       ContestStatus        @default(UPCOMING)
+  isPublished  Boolean              @default(false)
+  createdAt    DateTime             @default(now())
+
+  problems     ContestProblem[]
+  participants ContestParticipant[]
+  submissions  Submission[]
+
+  @@index([status, startTime])
+  @@index([slug])
+}
+
+model ContestProblem {
+  contestId  String
+  problemId  String
+  orderIndex Int     @default(0)
+  points     Int     @default(100)
+
+  contest    Contest @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  problem    Problem @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@id([contestId, problemId])
+  @@index([contestId, orderIndex])
+}
+
+model ContestParticipant {
+  contestId       String
+  userId          String
+  score           Int      @default(0)
+  penaltyTimeMins Int      @default(0)
+  rank            Int?
+  registeredAt    DateTime @default(now())
+
+  contest         Contest  @relation(fields: [contestId], references: [id], onDelete: Cascade)
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([contestId, userId])
+  @@index([contestId, score(sort: Desc), penaltyTimeMins(sort: Asc)])
+}
+
+model AIInteraction {
+  id               String            @id @default(cuid())
+  userId           String
+  problemId        String
+  interactionType  AIInteractionType
+  promptTokens     Int               @default(0)
+  completionTokens Int               @default(0)
+  prompt           String            @db.Text
+  response         String            @db.Text
+  createdAt        DateTime          @default(now())
+
+  user             User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  problem          Problem           @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([problemId])
+}
