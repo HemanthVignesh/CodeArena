@@ -2,13 +2,22 @@
 
 import React, { useState } from "react";
 import { Difficulty } from "@codearena/db";
-import { Clock, HardDrive, Copy, Check, Terminal, Layers } from "lucide-react";
+import {
+  Clock,
+  HardDrive,
+  Copy,
+  Check,
+  CheckCircle2,
+  Terminal,
+  Layers,
+} from "lucide-react";
 
 export interface WorkspaceProblemData {
   id: string;
   slug: string;
   title: string;
   difficulty: Difficulty;
+  isSolved?: boolean;
   statement: string;
   inputFormat: string | null;
   outputFormat: string | null;
@@ -71,6 +80,12 @@ export function ProblemDescriptionPanel({
           >
             {problem.difficulty}
           </span>
+          {problem.isSolved && (
+            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 font-mono shadow-sm">
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Solved</span>
+            </span>
+          )}
           <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono">
             <Clock className="w-3.5 h-3.5 text-slate-500" />
             <span>{problem.timeLimitMs} ms</span>

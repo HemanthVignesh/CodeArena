@@ -45,11 +45,26 @@ export default async function ProblemDetailPage({
     notFound();
   }
 
+  const isSolved = auth?.user?.id
+    ? Boolean(
+        await prisma.submission.findFirst({
+          where: {
+            userId: auth.user.id,
+            problemId: problem.id,
+            status: "COMPLETED",
+            verdict: "ACCEPTED",
+          },
+          select: { id: true },
+        }),
+      )
+    : false;
+
   const workspaceProblem: WorkspaceProblemData = {
     id: problem.id,
     slug: problem.slug,
     title: problem.title,
     difficulty: problem.difficulty,
+    isSolved,
     statement: problem.statement,
     inputFormat: problem.inputFormat,
     outputFormat: problem.outputFormat,

@@ -91,20 +91,28 @@ export function UserNav({ user, profile }: UserNavProps) {
 
           <div className="py-1">
             <Link
-              href="/dashboard"
+              href={`/profile/${user.username}`}
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
             >
-              <LayoutDashboard className="w-4 h-4 text-slate-400" />
-              <span>Dashboard</span>
+              <User className="w-4 h-4 text-emerald-400" />
+              <span>My Profile</span>
             </Link>
             <Link
               href="/submissions"
               onClick={() => setIsOpen(false)}
               className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
             >
-              <User className="w-4 h-4 text-slate-400" />
+              <Award className="w-4 h-4 text-purple-400" />
               <span>My Submissions</span>
+            </Link>
+            <Link
+              href="/dashboard"
+              onClick={() => setIsOpen(false)}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+            >
+              <LayoutDashboard className="w-4 h-4 text-slate-400" />
+              <span>Dashboard</span>
             </Link>
           </div>
 

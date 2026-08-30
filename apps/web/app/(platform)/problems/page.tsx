@@ -75,8 +75,8 @@ export default async function ProblemsPage({
     };
   }
 
-  // Fetch problems, tags, and total count concurrently
-  const [problems, total, allTags] = await Promise.all([
+  // Fetch problems, tags, total count, and user's solved problem IDs concurrently
+  const [problems, total, allTags, solvedSubmissions] = await Promise.all([
     prisma.problem.findMany({
       where,
       skip,
@@ -113,7 +113,22 @@ export default async function ProblemsPage({
         slug: true,
       },
     }),
+    auth?.user?.id
+      ? prisma.submission.findMany({
+          where: {
+            userId: auth.user.id,
+            status: "COMPLETED",
+            verdict: "ACCEPTED",
+          },
+          select: { problemId: true },
+          distinct: ["problemId"],
+        })
+      : Promise.resolve([]),
   ]);
+
+  const userSolvedProblemIds = new Set(
+    solvedSubmissions.map((s) => s.problemId),
+  );
 
   const totalPages = Math.ceil(total / pageSize) || 1;
 
@@ -279,50 +294,60 @@ export default async function ProblemsPage({
                   </td>
                 </tr>
               ) : (
-                problems.map((p, idx) => (
-                  <tr
-                    key={p.id}
-                    className="hover:bg-slate-800/40 transition-colors group"
-                  >
-                    <td className="py-4 px-4 text-center">
-                      <Circle className="w-4 h-4 text-slate-600 inline" />
-                    </td>
-                    <td className="py-4 px-4">
-                      <Link
-                        href={`/problems/${p.slug}`}
-                        className="font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors"
+                problems.map((p, idx) => {
+                  const isSolved = userSolvedProblemIds.has(p.id);
+                  return (
+                    <tr
+                      key={p.id}
+                      className="hover:bg-slate-800/40 transition-colors group"
+                    >
+                      <td
+                        className="py-4 px-4 text-center"
+                        title={isSolved ? "Solved" : "Unsolved"}
                       >
-                        {p.title}
-                      </Link>
-                    </td>
-                    <td className="py-4 px-4">
-                      <span
-                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getDifficultyBadge(
-                          p.difficulty,
-                        )}`}
-                      >
-                        {p.difficulty}
-                      </span>
-                    </td>
-                    <td className="py-4 px-4 hidden md:table-cell">
-                      <div className="flex flex-wrap gap-1">
-                        {p.tags.map((t) => (
-                          <span
-                            key={t.tag.id}
-                            className="px-2 py-0.5 rounded bg-slate-900 text-slate-400 text-xs font-medium border border-slate-800"
-                          >
-                            {t.tag.name}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="py-4 px-4 text-right font-mono text-xs text-slate-400 hidden sm:table-cell">
-                      {p.acceptanceRate
-                        ? `${p.acceptanceRate.toFixed(1)}%`
-                        : "0.0%"}
-                    </td>
-                  </tr>
-                ))
+                        {isSolved ? (
+                          <CheckCircle2 className="w-4 h-4 text-emerald-400 inline" />
+                        ) : (
+                          <Circle className="w-4 h-4 text-slate-600 inline" />
+                        )}
+                      </td>
+                      <td className="py-4 px-4">
+                        <Link
+                          href={`/problems/${p.slug}`}
+                          className="font-semibold text-slate-200 group-hover:text-emerald-400 transition-colors"
+                        >
+                          {p.title}
+                        </Link>
+                      </td>
+                      <td className="py-4 px-4">
+                        <span
+                          className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${getDifficultyBadge(
+                            p.difficulty,
+                          )}`}
+                        >
+                          {p.difficulty}
+                        </span>
+                      </td>
+                      <td className="py-4 px-4 hidden md:table-cell">
+                        <div className="flex flex-wrap gap-1">
+                          {p.tags.map((t) => (
+                            <span
+                              key={t.tag.id}
+                              className="px-2 py-0.5 rounded bg-slate-900 text-slate-400 text-xs font-medium border border-slate-800"
+                            >
+                              {t.tag.name}
+                            </span>
+                          ))}
+                        </div>
+                      </td>
+                      <td className="py-4 px-4 text-right font-mono text-xs text-slate-400 hidden sm:table-cell">
+                        {p.acceptanceRate
+                          ? `${p.acceptanceRate.toFixed(1)}%`
+                          : "0.0%"}
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
